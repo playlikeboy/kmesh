@@ -161,11 +161,15 @@ func CreateOrUpdateSecret(cmd *cobra.Command, args []string) error {
 
 	ipSecKey.Length = AeadAlgoICVLength
 
+	// Whether to create or update is decided by the lookup, not by the SPI we
+	// compute: an existing secret without a spi field would otherwise look new.
+	secretExists := true
 	secretOld, err := cli.Kube().CoreV1().Secrets(utils.KmeshNamespace).Get(context.TODO(), SecretName, metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get secret: %v, %v", SecretName, err)
 		}
+		secretExists = false
 		ipSecKey.Spi = 1
 	} else {
 		err = json.Unmarshal(secretOld.Data["ipSec"], &ipSecKeyOld)
@@ -190,7 +194,7 @@ func CreateOrUpdateSecret(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	if ipSecKey.Spi == 1 {
+	if !secretExists {
 		_, err = cli.Kube().CoreV1().Secrets(utils.KmeshNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to create %v secret, %v", SecretName, err)
